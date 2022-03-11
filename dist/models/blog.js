@@ -8,6 +8,7 @@ const Schema = mongoose_1.default.Schema;
 const blogSchema = new Schema({
     author: { type: String, required: true },
     description: { type: String },
-    images: { type: String }
+    imageUrl: { type: String, required: true },
+    tags: [{ type: String }],
 });
 exports.default = mongoose_1.default.model('Blog', blogSchema);

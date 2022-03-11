@@ -1,9 +1,10 @@
 import {Document} from 'mongoose'
 
-interface Blog{
+export interface Blog{
   author: string;
   description: string;
-  image: string;
+  imageUrl: string;
+  tag: string[];
 }
 
 export default interface BlogDoc extends Document, Blog {}

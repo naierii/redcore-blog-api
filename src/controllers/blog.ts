@@ -1,13 +1,29 @@
 import { RequestHandler } from "express"
+import fs from "fs"
 import Blog from "../models/blog"
 import HttpError from "../models/http-error"
 
+const deleteFile = (filePath:any) => {
+  fs.unlink(filePath, (err) => {
+    if(err){
+      throw new Error(err.message)
+    }
+  })
+}
+
 export const createBlog:RequestHandler = async (req, res, next) => {
-  const {description, image} = req.body
+  const {description, tags} = req.body
   const author = "Reian"
+  const image = req.file
+
+  if(!image){
+    return next(new HttpError("Attached file is not an image"))
+  }
+
+  const imageUrl = image.path;
 
   const newBlog = new Blog({
-    author, description, image
+    author, description, imageUrl, tags
   })
 
   try{
@@ -20,9 +36,13 @@ export const createBlog:RequestHandler = async (req, res, next) => {
 }
 
 export const getBlogs: RequestHandler = async (req, res, next) => {
+  const {filter, exclude} = req.query
   let blogs
   try{
-    blogs = await Blog.find()
+    const conditions:any = {$ne: exclude}
+    if(filter) conditions.$eq = filter
+    if(exclude) conditions.$ne = exclude
+    blogs = await Blog.find({tags: conditions})
   }catch(e){
     return next(new HttpError("Blog posts could not be loaded, please try again later.", 500, e))
   }
@@ -31,7 +51,7 @@ export const getBlogs: RequestHandler = async (req, res, next) => {
     return next(new HttpError("Blogs doesn't exist", 404))
   }
   
-  res.json({blogs})
+  res.status(201).json({blogs})
 }
 
 export const getBlog: RequestHandler = async (req, res, next) => {
@@ -48,22 +68,41 @@ export const getBlog: RequestHandler = async (req, res, next) => {
     return next(new HttpError("Blog does not exist", 404))
   }
 
-  res.json({blog})
+  res.status(201).json({blog})
 }
 
 export const editBlog: RequestHandler = async (req, res, next) => {
   const id = req.params.id
+  const newImageFile = req.file
 
-  const {description, image} = req.body
+  if(!newImageFile){
+    return next(new HttpError("Attached file is not an image"))
+  }
+
+  const newImageUrl = newImageFile.path
+
+  let oldBlog
+  try{
+    oldBlog = await Blog.findById(id)
+  }catch(e){
+    return next(new HttpError("Blog ID doesn't exists"))
+  }
+
+  const oldImageUrl = oldBlog?.imageUrl
+  if(typeof oldImageUrl !== "undefined"){
+    deleteFile(oldImageUrl)
+  }
+
+  const {description} = req.body
 
   let blog
   try{
-    blog = await Blog.updateOne({_id: id}, {$set: {description, image}})
+    blog = await Blog.updateOne({_id: id}, {$set: {description, imageUrl: newImageUrl}})
   }catch(e){
     return next(new HttpError("Update failed, try again later"))
   }
 
-  res.json({blog})
+  res.status(201).json({blog})
 }
 
 export const deleteBlog: RequestHandler = async (req, res, next) => {
@@ -71,10 +110,21 @@ export const deleteBlog: RequestHandler = async (req, res, next) => {
 
   let blog
   try{
-    blog = await Blog.deleteOne({_id: id})
+    blog = await Blog.findById(id)
+  }catch(e){
+    return next(new HttpError("Delete failed, id not found", 404, e))
+  }
+
+  try{
+    await Blog.deleteOne({_id: id})
   }catch(e){
     return next(new HttpError("Delete Failed, try again later"))
   }
 
-  res.json({blog})
+  const imageUrl = blog?.imageUrl
+  if(typeof imageUrl !== "undefined"){
+    deleteFile(imageUrl)
+  }
+
+  res.status(201).json({message: "Success!"})
 }
